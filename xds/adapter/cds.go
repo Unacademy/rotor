@@ -242,8 +242,12 @@ func configForCluster(client *redis.Client, env string, clusterName string) (*cl
 	key := configRedisKeyPrefix + env + "_" + clusterName
 	config, err := client.Get(key).Result()
 
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return nil, err
+	}
+
+	if config == "" {
+		config = `{"protocol":"grpc","enable_health_check":true,"grpc_health_check_service_name":""}`
 	}
 
 	var configParams clusterConfigParams
