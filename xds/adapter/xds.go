@@ -88,6 +88,8 @@ func WithTopResponseLog(n int, interval time.Duration) XDSOption {
 // certificate authority file, and default timeout.
 func NewXDS(
 	addr string,
+	redisAddr string,
+	env string,
 	registrar poller.Registrar,
 	caFile string,
 	defaultTimeout time.Duration,
@@ -108,6 +110,8 @@ func NewXDS(
 			caFile,
 			defaultTimeout,
 			resolveDNS,
+			redisAddr,
+			env,
 		),
 		stats,
 	)

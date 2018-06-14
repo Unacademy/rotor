@@ -53,3 +53,7 @@ ignored = [
 [[constraint]]
   name = "k8s.io/api"
   revision = "kubernetes-1.10.0"
+
+[[constraint]]
+  name = "github.com/go-redis/redis"
+  version = "6.12.0"

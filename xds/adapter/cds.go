@@ -27,22 +27,49 @@ import (
 
 	tbnapi "github.com/turbinelabs/api"
 	"github.com/turbinelabs/rotor/xds/poller"
+	"github.com/go-redis/redis"
+	"encoding/json"
+	google_protobuf2 "github.com/gogo/protobuf/types"
 )
 
 const (
 	clusterConnectTimeoutSecs = 10
+	configRedisKeyPrefix = "rotor_cds_"
+	http1 = "http1"
+	http2 = "http2"
+	gRPC = "grpc"
 )
+
+type clusterConfigParams struct {
+	Protocol					string	`json:"protocol"`  //Can be http1, http2, grpc. Required.
+	EnableHealthCheck			bool	`json:"enable_health_check"`		//Defaults to false
+	HttpHealthCheckUrl			string	`json:"http_health_check_url"`
+	GrpcHealthCheckServiceName	string	`json:"grpc_health_check_service_name"`	//Defaults to ""
+}
 
 type cds struct {
 	caFile string
+	env string
+	redis *redis.Client
+}
+
+func newCds(caFile string, redisAddr string, env string) cds {
+	return cds{
+		caFile: caFile,
+		env: env,
+		redis: redis.NewClient(&redis.Options{Addr:redisAddr, Password:"", DB:0, PoolSize:10}),
+	}
 }
 
 // resourceAdapter turns poller.Objects into Cluster cache.Resources
 func (s cds) resourceAdapter(objects *poller.Objects) (cache.Resources, error) {
 	resources := make(map[string]cache.Resource, len(objects.Clusters))
 	for _, cluster := range objects.Clusters {
-		envoyCluster := s.tbnToEnvoyCluster(cluster, objects)
-		resources[envoyCluster.GetName()] = s.tbnToEnvoyCluster(cluster, objects)
+		envoyCluster, err := s.tbnToEnvoyCluster(cluster, objects)
+		if err != nil {
+			return cache.Resources{}, err
+		}
+		resources[envoyCluster.GetName()] = envoyCluster
 	}
 	return cache.Resources{Version: objects.TerribleHash(), Items: resources}, nil
 }
@@ -50,7 +77,7 @@ func (s cds) resourceAdapter(objects *poller.Objects) (cache.Resources, error) {
 func (s cds) tbnToEnvoyCluster(
 	tbnCluster tbnapi.Cluster,
 	objects *poller.Objects,
-) *envoyapi.Cluster {
+) (*envoyapi.Cluster, error) {
 	subsets := objects.SubsetsPerCluster(tbnCluster.ClusterKey)
 
 	var subsetConfig *envoyapi.Cluster_LbSubsetConfig
@@ -94,7 +121,12 @@ func (s cds) tbnToEnvoyCluster(
 		}
 	}
 
-	return &envoyapi.Cluster{
+	configParams, err := configForCluster(s.redis, s.env, tbnCluster.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	cluster := &envoyapi.Cluster{
 		Name: tbnCluster.Name,
 		Type: envoyapi.Cluster_EDS,
 		EdsClusterConfig: &envoyapi.Cluster_EdsClusterConfig{
@@ -108,6 +140,25 @@ func (s cds) tbnToEnvoyCluster(
 		CircuitBreakers:  tbnToEnvoyCircuitBreakers(tbnCluster.CircuitBreakers),
 		OutlierDetection: tbnToEnvoyOutlierDetection(tbnCluster.OutlierDetection),
 	}
+
+	if configParams.Protocol == http2 || configParams.Protocol == gRPC {
+		cluster.Http2ProtocolOptions = &envoycore.Http2ProtocolOptions{}
+	}
+
+	if configParams.EnableHealthCheck {
+		hc := &envoycore.HealthCheck{
+			Timeout: &google_protobuf2.Duration{Nanos:100000000},
+			Interval: &google_protobuf2.Duration{Seconds:30},
+		}
+		if configParams.Protocol == http1 || configParams.Protocol == http2 {
+			hc.HealthChecker = &envoycore.HealthCheck_HttpHealthCheck_{HttpHealthCheck:&envoycore.HealthCheck_HttpHealthCheck{Path: configParams.HttpHealthCheckUrl}}
+		} else {
+			hc.HealthChecker = &envoycore.HealthCheck_GrpcHealthCheck_{GrpcHealthCheck:&envoycore.HealthCheck_GrpcHealthCheck{ServiceName: configParams.GrpcHealthCheckServiceName}}
+		}
+		cluster.HealthChecks = []*envoycore.HealthCheck{hc}
+	}
+
+	return cluster, nil
 }
 
 func tbnToEnvoyCircuitBreakers(tbnCb *tbnapi.CircuitBreakers) *envoycluster.CircuitBreakers {
@@ -185,4 +236,18 @@ func envoyToTbnOutlierDetection(eod *envoycluster.OutlierDetection) *tbnapi.Outl
 		ConsecutiveGatewayFailure:          uint32PtrToIntPtr(eod.GetConsecutiveGatewayFailure()),
 		EnforcingConsecutiveGatewayFailure: uint32PtrToIntPtr(eod.GetEnforcingConsecutiveGatewayFailure()),
 	}
+}
+
+func configForCluster(client *redis.Client, env string, clusterName string) (*clusterConfigParams, error) {
+	key := configRedisKeyPrefix + env + "_" + clusterName
+	config, err := client.Get(key).Result()
+
+	if err != nil {
+		return nil, err
+	}
+
+	var configParams clusterConfigParams
+	err = json.Unmarshal([]byte(config), &configParams)
+
+	return &configParams, err
 }

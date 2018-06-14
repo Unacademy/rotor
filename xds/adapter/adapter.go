@@ -96,8 +96,8 @@ func newEndpointAdapter(resolveDNS bool) resourceAdapter {
 // If non-empty, the caFile string specifies a path for the certificate
 // authority, which must be present on the Envoy serving traffic to these
 // Clusters.
-func newClusterAdapter(caFile string) resourceAdapter {
-	return cds{caFile}.resourceAdapter
+func newClusterAdapter(caFile string, redisAddr string, env string) resourceAdapter {
+	return newCds(caFile, redisAddr, env).resourceAdapter
 }
 
 // newRouteAdapter returns a resourceAdapter that produces Route Resources. The

@@ -91,6 +91,20 @@ func NewXDSFromFlags(
 		"If true, resolve EDS hostnames to IP addresses.",
 	)
 
+	flags.StringVar(
+		&ff.redis,
+		"redis",
+		"",
+		"The host:port of redis instance to pick config information from.",
+	)
+
+	flags.StringVar(
+		&ff.env,
+		"env",
+		"",
+		"Deployment environment for rotor.",
+	)
+
 	return ff
 }
 
@@ -102,6 +116,8 @@ type xdsFromFlags struct {
 	statsFromFlags     stats.FromFlags
 	defaultTimeout     time.Duration
 	resolveDNS         bool
+	redis			   string
+	env				   string
 }
 
 func (ff *xdsFromFlags) Make(registrar poller.Registrar) (XDS, error) {
@@ -112,6 +128,8 @@ func (ff *xdsFromFlags) Make(registrar poller.Registrar) (XDS, error) {
 
 	return NewXDS(
 		ff.addr.Addr(),
+		ff.redis,
+		ff.env,
 		registrar,
 		ff.caFile,
 		ff.defaultTimeout,

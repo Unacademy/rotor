@@ -90,6 +90,21 @@
   version = "v1.36.0"
 
 [[projects]]
+  name = "github.com/go-redis/redis"
+  packages = [
+    ".",
+    "internal",
+    "internal/consistenthash",
+    "internal/hashtag",
+    "internal/pool",
+    "internal/proto",
+    "internal/singleflight",
+    "internal/util"
+  ]
+  revision = "83fb42932f6145ce52df09860384a4653d2d332a"
+  version = "v6.12.0"
+
+[[projects]]
   name = "github.com/gogo/googleapis"
   packages = [
     "google/api",
@@ -455,6 +470,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "646a1470ee7271c7df926aea6ef8be1e69bbd6570b83ff2ec54af5b6cfacb8e9"
+  inputs-digest = "6562e9a41a929e6f75e713a09a1fd434ef77015f10da891b7dcb3e6e2b213ae9"
   solver-name = "gps-cdcl"
   solver-version = 1
