@@ -149,6 +149,8 @@ func (s cds) tbnToEnvoyCluster(
 		hc := &envoycore.HealthCheck{
 			Timeout: &google_protobuf2.Duration{Nanos:100000000},
 			Interval: &google_protobuf2.Duration{Seconds:30},
+			UnhealthyThreshold: &google_protobuf2.UInt32Value{Value: 5},
+			HealthyThreshold: &google_protobuf2.UInt32Value{Value: 5},
 		}
 		if configParams.Protocol == http1 || configParams.Protocol == http2 {
 			hc.HealthChecker = &envoycore.HealthCheck_HttpHealthCheck_{HttpHealthCheck:&envoycore.HealthCheck_HttpHealthCheck{Path: configParams.HttpHealthCheckUrl}}
